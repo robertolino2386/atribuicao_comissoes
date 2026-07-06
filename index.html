@@ -352,7 +352,7 @@
   </footer>
 
   <script>
-    const API_URL = "COLE_AQUI_A_URL_DO_APPS_SCRIPT";
+    const API_URL = "https://script.google.com/macros/s/AKfycby-n2nlfwxTU4QN2KWl9uNcLw7cpp5UtC18xcRa9ciki_B9wnTrEaDL-RMvhR_s9Zc3QA/exec";
 
     let baseFornecedores = [];
     let resultado = [];
@@ -369,6 +369,15 @@
 
     function escaparSQL(valor) {
       return String(valor || "").replace(/'/g, "''");
+    }
+
+    function escaparHTML(valor) {
+      return String(valor || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
     function encontrarCampo(obj, nomesPossiveis) {
@@ -391,6 +400,7 @@
 
       const resp = await fetch(API_URL, {
         method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ action, ...payload })
       });
 
@@ -578,12 +588,12 @@
 
         tbody.insertAdjacentHTML("beforeend", `
           <tr>
-            <td><span class="badge ${badge}">${r.status}</span></td>
-            <td>${r.fornecedor || ""}</td>
-            <td>${r.codigo || ""}</td>
-            <td>${r.rede || ""}</td>
-            <td>${r.responsavel || r.sugestao || ""}</td>
-            <td>${r.update || ""}</td>
+            <td><span class="badge ${badge}">${escaparHTML(r.status)}</span></td>
+            <td>${escaparHTML(r.fornecedor || "")}</td>
+            <td>${escaparHTML(r.codigo || "")}</td>
+            <td>${escaparHTML(r.rede || "")}</td>
+            <td>${escaparHTML(r.responsavel || r.sugestao || "")}</td>
+            <td>${escaparHTML(r.update || "")}</td>
           </tr>
         `);
       });
@@ -599,12 +609,12 @@
       pendentes.forEach(p => {
         tbody.insertAdjacentHTML("beforeend", `
           <tr>
-            <td>${p.fornecedor}</td>
-            <td>${p.codigo}</td>
-            <td>${p.rede || ""}</td>
-            <td>${p.sugestao || ""}</td>
+            <td>${escaparHTML(p.fornecedor)}</td>
+            <td>${escaparHTML(p.codigo)}</td>
+            <td>${escaparHTML(p.rede || "")}</td>
+            <td>${escaparHTML(p.sugestao || "")}</td>
             <td>
-              <input type="text" id="resp_${p.id}" value="${p.responsavel || ""}" placeholder="Digite o responsável" />
+              <input type="text" id="resp_${p.id}" value="${escaparHTML(p.responsavel || "")}" placeholder="Digite o responsável" />
             </td>
             <td>
               ${p.sugestao ? `<button class="secondary" onclick="aceitarSugestao(${p.id})">Aceitar sugestão</button>` : ""}
