@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Análise de Fornecedores</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -37,7 +38,7 @@
     }
 
     main {
-      max-width: 1280px;
+      max-width: 1320px;
       margin: 24px auto;
       padding: 0 16px 40px;
     }
@@ -57,6 +58,10 @@
       font-size: 20px;
     }
 
+    p {
+      line-height: 1.5;
+    }
+
     label {
       display: block;
       font-weight: bold;
@@ -64,7 +69,8 @@
     }
 
     input[type="file"],
-    input[type="text"] {
+    input[type="text"],
+    select {
       width: 100%;
       padding: 11px;
       border: 1px solid #cbd5e1;
@@ -90,6 +96,12 @@
       transform: translateY(-1px);
     }
 
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     button.secondary {
       background: #69A0D3;
       color: #082f49;
@@ -102,6 +114,10 @@
     button.warn {
       background: #D6AE00;
       color: #1f2937;
+    }
+
+    button.danger {
+      background: #b91c1c;
     }
 
     button.small-btn {
@@ -151,6 +167,14 @@
       margin-top: 6px;
     }
 
+    .filters {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+      margin: 14px 0 16px;
+      align-items: end;
+    }
+
     .table-wrap {
       overflow-x: auto;
       border: 1px solid #e5e7eb;
@@ -161,10 +185,11 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 1050px;
+      min-width: 1120px;
     }
 
-    th, td {
+    th,
+    td {
       border-bottom: 1px solid #e5e7eb;
       padding: 10px;
       text-align: left;
@@ -175,6 +200,7 @@
     th {
       background: #00285C;
       color: white;
+      white-space: nowrap;
     }
 
     tr:nth-child(even) td {
@@ -189,6 +215,7 @@
       font-size: 12px;
       background: #fee2e2;
       color: #991b1b;
+      white-space: nowrap;
     }
 
     .badge.suggest {
@@ -201,9 +228,41 @@
       color: #166534;
     }
 
+    .badge.empty {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
     .muted {
       color: #64748b;
       font-size: 12px;
+    }
+
+    .suggestion-box {
+      font-weight: bold;
+      color: #92400e;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      padding: 7px 9px;
+      border-radius: 10px;
+      display: inline-block;
+      min-width: 70px;
+      text-align: center;
+    }
+
+    .pagination {
+      margin-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .pagination .page-info {
+      color: #475569;
+      font-size: 14px;
+      font-weight: bold;
     }
 
     footer {
@@ -214,8 +273,13 @@
     }
 
     @media (max-width: 900px) {
-      .summary {
+      .summary,
+      .filters {
         grid-template-columns: 1fr;
+      }
+
+      main {
+        padding: 0 12px 36px;
       }
     }
   </style>
@@ -224,12 +288,13 @@
 <body>
   <header>
     <h1>Análise de Fornecedores</h1>
-    <p>Leitura da Base de Fornecedores, sugestão por Rede e gravação dos responsáveis confirmados</p>
+    <p>Base de Fornecedores, sugestão por Rede, edição de responsáveis e gravação no Google Sheets</p>
   </header>
 
   <main>
     <div class="card">
       <h2>1. Base de Fornecedores</h2>
+
       <p>
         Suba o arquivo da base para alimentar o Google Sheets de forma incremental.
         Fornecedores novos são acrescentados e fornecedores já existentes são atualizados.
@@ -254,7 +319,7 @@
 
       <div class="actions">
         <button onclick="processarAnalise()">Processar Arquivo</button>
-        <button class="secondary" onclick="salvarTodosPreenchidos()">Salvar todos preenchidos</button>
+        <button class="success" onclick="salvarTodosPreenchidos()">Salvar todos preenchidos</button>
         <button class="warn" onclick="limparTela()">Limpar Tela</button>
       </div>
 
@@ -285,9 +350,25 @@
 
     <div class="card">
       <h2>3. Fornecedores sem responsável identificado</h2>
+
       <p class="muted">
-        Edite ou confirme a sugestão. Ao salvar, o fornecedor será gravado na Base de Fornecedores para os próximos relatórios.
+        A sugestão fica visível para análise. Ao lado, preencha ou ajuste o responsável correto.
+        Depois clique em Salvar para gravar na Base de Fornecedores.
       </p>
+
+      <div class="filters">
+        <div>
+          <label for="filtroFornecedor">Pesquisar fornecedor</label>
+          <input type="text" id="filtroFornecedor" placeholder="Digite parte do nome do fornecedor..." oninput="aplicarFiltros()" />
+        </div>
+
+        <div>
+          <label for="filtroRede">Filtrar Rede</label>
+          <select id="filtroRede" onchange="aplicarFiltros()">
+            <option value="">Todas</option>
+          </select>
+        </div>
+      </div>
 
       <div class="table-wrap">
         <table>
@@ -298,16 +379,26 @@
               <th>Código</th>
               <th>Rede</th>
               <th>Sugestão</th>
-              <th>Responsável correto</th>
+              <th>Responsável</th>
               <th>Ação</th>
             </tr>
           </thead>
+
           <tbody id="tbodyPendentes">
             <tr>
               <td colspan="7">Nenhum arquivo processado.</td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="pagination">
+        <div class="actions">
+          <button class="secondary" onclick="paginaAnterior()" id="btnAnterior">Anterior</button>
+          <button class="secondary" onclick="proximaPagina()" id="btnProximo">Próximo</button>
+        </div>
+
+        <div class="page-info" id="infoPagina">Página 0 de 0</div>
       </div>
     </div>
   </main>
@@ -321,14 +412,17 @@
 
     let baseFornecedores = [];
     let pendentesGlobais = [];
+    let pendentesFiltrados = [];
+    let paginaAtual = 1;
+    const itensPorPagina = 10;
 
     function normalizarTexto(valor) {
       return String(valor || "")
         .normalize("NFD")
-        .replace(/[\\u0300-\\u036f]/g, "")
+        .replace(/[\u0300-\u036f]/g, "")
         .trim()
         .toUpperCase()
-        .replace(/\\s+/g, " ");
+        .replace(/\s+/g, " ");
     }
 
     function escaparHTML(valor) {
@@ -353,6 +447,7 @@
 
     function ehRedeIndependente(rede) {
       const redeNorm = normalizarTexto(rede);
+
       return redeNorm === "INDEPENDENTE" ||
              redeNorm === "REDE INDEPENDENTE" ||
              redeNorm === "INDEPENDENTES";
@@ -388,7 +483,7 @@
         baseFornecedores = json.data || [];
 
         document.getElementById("mBase").textContent = baseFornecedores.length;
-        document.getElementById("statusBase").textContent = `Base carregada com ${baseFornecedores.length} fornecedores.`;
+        document.getElementById("statusBase").textContent = `Base carregada com ${baseFornecedores.length} fornecedor(es).`;
 
       } catch (err) {
         document.getElementById("statusBase").textContent = "Erro ao carregar base: " + err.message;
@@ -409,7 +504,10 @@
         reader.onload = function(e) {
           try {
             const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: "array" });
+            const workbook = XLSX.read(data, {
+              type: "array"
+            });
+
             const primeiraAba = workbook.SheetNames[0];
             const sheet = workbook.Sheets[primeiraAba];
 
@@ -447,7 +545,11 @@
               "Nome Fornecedor",
               "Nome do Fornecedor"
             ]),
-            rede: encontrarCampo(linha, ["Rede"]),
+            rede: encontrarCampo(linha, [
+              "Rede",
+              "Rede Fornecedor",
+              "Nome Rede"
+            ]),
             responsavel: encontrarCampo(linha, [
               "Responsável",
               "Responsavel",
@@ -506,12 +608,16 @@
     }
 
     function sugerirResponsavelPorRede(rede, responsaveisPorRede) {
-      if (!rede || ehRedeIndependente(rede)) return "";
+      if (!rede || ehRedeIndependente(rede)) {
+        return "";
+      }
 
       const redeKey = normalizarTexto(rede);
       const bucket = responsaveisPorRede.get(redeKey);
 
-      if (!bucket) return "";
+      if (!bucket) {
+        return "";
+      }
 
       return Object.entries(bucket)
         .sort((a, b) => b[1] - a[1])[0][0];
@@ -554,7 +660,9 @@
             "Nome Rede"
           ]);
 
-          if (!pessoa) return;
+          if (!pessoa) {
+            return;
+          }
 
           analisadas++;
 
@@ -573,26 +681,85 @@
               codigo,
               rede: redeFinal,
               sugestao,
-              responsavel: sugestao || "",
+              responsavel: "",
               salvo: false,
               motivo: encontrado ? "Fornecedor localizado na base, mas sem responsável preenchido." : "Fornecedor não localizado na Base de Fornecedores."
             });
           }
         });
 
+        pendentes.sort((a, b) => {
+          const redeA = normalizarTexto(a.rede);
+          const redeB = normalizarTexto(b.rede);
+          const pessoaA = normalizarTexto(a.pessoa);
+          const pessoaB = normalizarTexto(b.pessoa);
+
+          if (redeA < redeB) return -1;
+          if (redeA > redeB) return 1;
+          if (pessoaA < pessoaB) return -1;
+          if (pessoaA > pessoaB) return 1;
+          return 0;
+        });
+
         pendentesGlobais = pendentes;
+        paginaAtual = 1;
 
         document.getElementById("mAnalise").textContent = analisadas;
         document.getElementById("mIdentificados").textContent = identificados;
         document.getElementById("mPendentes").textContent = pendentes.length;
 
-        renderizarPendentes();
+        preencherFiltroRede();
+        aplicarFiltros();
 
-        document.getElementById("statusAnalise").textContent = `Processamento concluído. ${pendentes.length} fornecedor(es) sem responsável identificado.`;
+        document.getElementById("statusAnalise").textContent =
+          `Processamento concluído. ${pendentes.length} fornecedor(es) sem responsável identificado.`;
 
       } catch (err) {
         document.getElementById("statusAnalise").textContent = "Erro ao processar análise: " + err.message;
       }
+    }
+
+    function preencherFiltroRede() {
+      const select = document.getElementById("filtroRede");
+      const valorAtual = select.value;
+
+      const redes = [...new Set(
+        pendentesGlobais
+          .map(item => item.rede || "")
+          .filter(rede => rede)
+      )].sort((a, b) => normalizarTexto(a).localeCompare(normalizarTexto(b)));
+
+      select.innerHTML = '<option value="">Todas</option>';
+
+      redes.forEach(rede => {
+        const option = document.createElement("option");
+        option.value = rede;
+        option.textContent = rede;
+        select.appendChild(option);
+      });
+
+      if (valorAtual && redes.includes(valorAtual)) {
+        select.value = valorAtual;
+      }
+    }
+
+    function aplicarFiltros() {
+      const termo = normalizarTexto(document.getElementById("filtroFornecedor").value);
+      const redeSelecionada = normalizarTexto(document.getElementById("filtroRede").value);
+
+      pendentesFiltrados = pendentesGlobais.filter(item => {
+        const fornecedorOk = !termo || normalizarTexto(item.pessoa).includes(termo);
+        const redeOk = !redeSelecionada || normalizarTexto(item.rede) === redeSelecionada;
+
+        return fornecedorOk && redeOk;
+      });
+
+      paginaAtual = 1;
+      renderizarPendentes();
+    }
+
+    function totalPaginas() {
+      return Math.max(1, Math.ceil(pendentesFiltrados.length / itensPorPagina));
     }
 
     function renderizarPendentes() {
@@ -602,15 +769,36 @@
       if (!pendentesGlobais.length) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7">Todos os fornecedores foram identificados com responsável.</td>
+            <td colspan="7">Nenhum arquivo processado.</td>
           </tr>
         `;
+
+        atualizarPaginacao(0);
         return;
       }
 
-      pendentesGlobais.forEach(item => {
-        const badgeClass = item.salvo ? "saved" : (item.sugestao ? "suggest" : "");
-        const statusTexto = item.salvo ? "Salvo" : (item.sugestao ? "Sugestão" : "Pendente");
+      if (!pendentesFiltrados.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7">Nenhum fornecedor encontrado com os filtros aplicados.</td>
+          </tr>
+        `;
+
+        atualizarPaginacao(0);
+        return;
+      }
+
+      const inicio = (paginaAtual - 1) * itensPorPagina;
+      const fim = inicio + itensPorPagina;
+      const itensPagina = pendentesFiltrados.slice(inicio, fim);
+
+      itensPagina.forEach(item => {
+        const badgeClass = item.salvo ? "saved" : (item.sugestao ? "suggest" : "empty");
+        const statusTexto = item.salvo ? "Salvo" : (item.sugestao ? "Com sugestão" : "Sem sugestão");
+
+        const sugestaoHtml = item.sugestao
+          ? `<span class="suggestion-box">${escaparHTML(item.sugestao)}</span>`
+          : `<span class="muted">Sem sugestão</span>`;
 
         tbody.insertAdjacentHTML("beforeend", `
           <tr id="linha_${item.id}">
@@ -618,35 +806,91 @@
             <td>${escaparHTML(item.pessoa)}</td>
             <td>${escaparHTML(item.codigo)}</td>
             <td>${escaparHTML(item.rede)}</td>
-            <td>${escaparHTML(item.sugestao || "")}</td>
+            <td>${sugestaoHtml}</td>
             <td>
-              <input type="text" id="resp_${item.id}" value="${escaparHTML(item.responsavel || "")}" placeholder="Digite o responsável" ${item.salvo ? "disabled" : ""} />
+              <input
+                type="text"
+                id="resp_${item.id}"
+                value="${escaparHTML(item.responsavel || "")}"
+                placeholder="Digite o responsável"
+                oninput="atualizarResponsavelLocal(${item.id})"
+                ${item.salvo ? "disabled" : ""}
+              />
             </td>
             <td>
               <div class="actions">
-                ${item.sugestao && !item.salvo ? `<button class="secondary small-btn" onclick="confirmarSugestao(${item.id})">Confirmar</button>` : ""}
+                ${item.sugestao && !item.salvo ? `<button class="secondary small-btn" onclick="usarSugestao(${item.id})">Usar sugestão</button>` : ""}
                 ${!item.salvo ? `<button class="success small-btn" onclick="salvarLinha(${item.id})">Salvar</button>` : `<span class="muted">Gravado na base</span>`}
               </div>
             </td>
           </tr>
         `);
       });
+
+      atualizarPaginacao(pendentesFiltrados.length);
     }
 
-    function confirmarSugestao(id) {
+    function atualizarPaginacao(totalItens) {
+      const paginas = totalItens ? totalPaginas() : 0;
+
+      document.getElementById("infoPagina").textContent =
+        totalItens
+          ? `Página ${paginaAtual} de ${paginas} | ${totalItens} registro(s)`
+          : "Página 0 de 0";
+
+      document.getElementById("btnAnterior").disabled = !totalItens || paginaAtual <= 1;
+      document.getElementById("btnProximo").disabled = !totalItens || paginaAtual >= paginas;
+    }
+
+    function paginaAnterior() {
+      if (paginaAtual > 1) {
+        paginaAtual--;
+        renderizarPendentes();
+      }
+    }
+
+    function proximaPagina() {
+      if (paginaAtual < totalPaginas()) {
+        paginaAtual++;
+        renderizarPendentes();
+      }
+    }
+
+    function atualizarResponsavelLocal(id) {
       const item = pendentesGlobais.find(p => p.id === id);
-      if (!item || !item.sugestao) return;
+      const input = document.getElementById(`resp_${id}`);
+
+      if (item && input) {
+        item.responsavel = input.value.trim();
+      }
+    }
+
+    function usarSugestao(id) {
+      const item = pendentesGlobais.find(p => p.id === id);
+
+      if (!item || !item.sugestao) {
+        return;
+      }
+
+      item.responsavel = item.sugestao;
 
       const input = document.getElementById(`resp_${id}`);
-      input.value = item.sugestao;
+
+      if (input) {
+        input.value = item.sugestao;
+      }
     }
 
     async function salvarLinha(id) {
       try {
         const item = pendentesGlobais.find(p => p.id === id);
-        if (!item) return;
 
-        const responsavel = document.getElementById(`resp_${id}`).value.trim();
+        if (!item) {
+          return;
+        }
+
+        const input = document.getElementById(`resp_${id}`);
+        const responsavel = input ? input.value.trim() : item.responsavel;
 
         if (!responsavel) {
           alert("Informe o responsável antes de salvar.");
@@ -668,7 +912,8 @@
         await carregarBase();
         renderizarPendentes();
 
-        document.getElementById("statusAnalise").textContent = `Responsável salvo para ${item.pessoa}.`;
+        document.getElementById("statusAnalise").textContent =
+          `Responsável salvo para ${item.pessoa}.`;
 
       } catch (err) {
         alert("Erro ao salvar responsável: " + err.message);
@@ -680,10 +925,13 @@
         const registros = [];
 
         pendentesGlobais.forEach(item => {
-          if (item.salvo) return;
+          if (item.salvo) {
+            return;
+          }
 
           const input = document.getElementById(`resp_${item.id}`);
-          const responsavel = input ? input.value.trim() : "";
+          const responsavelTela = input ? input.value.trim() : "";
+          const responsavel = responsavelTela || item.responsavel || "";
 
           if (responsavel) {
             registros.push({
@@ -725,7 +973,10 @@
 
     function limparTela() {
       document.getElementById("arquivoAnalise").value = "";
+
       pendentesGlobais = [];
+      pendentesFiltrados = [];
+      paginaAtual = 1;
 
       document.getElementById("tbodyPendentes").innerHTML = `
         <tr>
@@ -733,13 +984,21 @@
         </tr>
       `;
 
+      document.getElementById("filtroFornecedor").value = "";
+      document.getElementById("filtroRede").innerHTML = '<option value="">Todas</option>';
+
       document.getElementById("mAnalise").textContent = "0";
       document.getElementById("mIdentificados").textContent = "0";
       document.getElementById("mPendentes").textContent = "0";
       document.getElementById("statusAnalise").textContent = "";
+
+      atualizarPaginacao(0);
     }
 
-    window.addEventListener("load", carregarBase);
+    window.addEventListener("load", () => {
+      carregarBase();
+      atualizarPaginacao(0);
+    });
   </script>
 </body>
 </html>
