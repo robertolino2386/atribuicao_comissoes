@@ -225,7 +225,7 @@
       <input type="file" id="arquivoAnalise" accept=".xlsx,.xls,.csv" />
 
       <div class="hint">
-        O sistema procura o fornecedor pelo campo Pessoa e mostra apenas os registros sem responsável identificado.
+        O sistema procura o fornecedor pelo campo Pessoa e mostra apenas os registros sem responsável identificado. Quando houver Rede, sugere o responsável com base em outros fornecedores da mesma rede.
       </div>
 
       <button onclick="processarAnalise()">Processar Arquivo</button>
@@ -263,12 +263,14 @@
               <th>Status</th>
               <th>Pessoa / Fornecedor</th>
               <th>Código</th>
+              <th>Rede</th>
+              <th>Sugestão de Responsável</th>
               <th>Motivo</th>
             </tr>
           </thead>
           <tbody id="tbodyPendentes">
             <tr>
-              <td colspan="4">Nenhum arquivo processado.</td>
+              <td colspan="6">Nenhum arquivo processado.</td>
             </tr>
           </tbody>
         </table>
@@ -406,11 +408,53 @@
 
     function montarIndiceBase() {
       const indice = new Map();
+      const responsaveisPorRede = new Map();
+
       baseFornecedores.forEach(item => {
         const fornecedor = normalizarTexto(item.fornecedor);
-        if (fornecedor) indice.set(fornecedor, item);
+        const rede = normalizarTexto(item.rede);
+        const responsavel = String(item.responsavel || "").trim();
+
+        if (fornecedor) {
+          indice.set(fornecedor, item);
+        }
+
+        if (rede && responsavel && !ehRedeIndependente(rede)) {
+          if (!responsaveisPorRede.has(rede)) {
+            responsaveisPorRede.set(rede, {});
+          }
+
+          const bucket = responsaveisPorRede.get(rede);
+          bucket[responsavel] = (bucket[responsavel] || 0) + 1;
+        }
       });
-      return indice;
+
+      return {
+        porFornecedor: indice,
+        responsaveisPorRede
+      };
+    }
+
+    function ehRedeIndependente(rede) {
+      const redeNormalizada = normalizarTexto(rede);
+      return redeNormalizada === "INDEPENDENTE" || redeNormalizada === "REDE INDEPENDENTE";
+    }
+
+    function sugerirResponsavelPorRede(rede, responsaveisPorRede) {
+      const redeNormalizada = normalizarTexto(rede);
+
+      if (!redeNormalizada || ehRedeIndependente(redeNormalizada)) {
+        return "";
+      }
+
+      const bucket = responsaveisPorRede.get(redeNormalizada);
+
+      if (!bucket) {
+        return "";
+      }
+
+      return Object.entries(bucket)
+        .sort((a, b) => b[1] - a[1])[0][0];
     }
 
     async function processarAnalise() {
@@ -420,7 +464,7 @@
         if (!baseFornecedores.length) await carregarBase();
 
         const linhas = await lerArquivoExcel("arquivoAnalise");
-        const indiceBase = montarIndiceBase();
+        const { porFornecedor, responsaveisPorRede } = montarIndiceBase();
 
         let analisadas = 0;
         let identificados = 0;
@@ -429,20 +473,28 @@
         linhas.forEach(linha => {
           const pessoa = encontrarCampo(linha, ["Pessoa", "Fornecedor", "Nome Fornecedor", "Nome do Fornecedor"]);
           const codigo = encontrarCampo(linha, ["Código", "Codigo", "CODIGO", "CCPP", "Código CCPP"]);
+          const rede = encontrarCampo(linha, ["Rede", "Nome Rede", "Rede Fornecedor", "Nome da Rede"]);
 
           if (!pessoa) return;
 
           analisadas++;
           const chavePessoa = normalizarTexto(pessoa);
-          const encontrado = indiceBase.get(chavePessoa);
+          const encontrado = porFornecedor.get(chavePessoa);
 
           if (encontrado && encontrado.responsavel) {
             identificados++;
           } else {
+            const redeParaSugestao = rede || (encontrado ? encontrado.rede : "");
+            const sugestao = sugerirResponsavelPorRede(redeParaSugestao, responsaveisPorRede);
+
             pendentes.push({
               pessoa,
               codigo,
-              motivo: encontrado ? "Fornecedor localizado na base, mas sem responsável preenchido." : "Fornecedor não localizado na Base de Fornecedores."
+              rede: redeParaSugestao,
+              sugestao,
+              motivo: encontrado
+                ? "Fornecedor localizado na base, mas sem responsável preenchido."
+                : "Fornecedor não localizado na Base de Fornecedores."
             });
           }
         });
@@ -463,7 +515,7 @@
       tbody.innerHTML = "";
 
       if (!pendentes.length) {
-        tbody.innerHTML = `<tr><td colspan="4">Todos os fornecedores foram identificados com responsável.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6">Todos os fornecedores foram identificados com responsável.</td></tr>`;
         return;
       }
 
@@ -473,6 +525,8 @@
             <td><span class="badge">Pendente</span></td>
             <td>${escaparHTML(item.pessoa)}</td>
             <td>${escaparHTML(item.codigo)}</td>
+            <td>${escaparHTML(item.rede)}</td>
+            <td>${item.sugestao ? escaparHTML(item.sugestao) : "Sem sugestão"}</td>
             <td>${escaparHTML(item.motivo)}</td>
           </tr>
         `);
@@ -481,7 +535,7 @@
 
     function limparTela() {
       document.getElementById("arquivoAnalise").value = "";
-      document.getElementById("tbodyPendentes").innerHTML = `<tr><td colspan="4">Nenhum arquivo processado.</td></tr>`;
+      document.getElementById("tbodyPendentes").innerHTML = `<tr><td colspan="6">Nenhum arquivo processado.</td></tr>`;
       document.getElementById("mAnalise").textContent = "0";
       document.getElementById("mIdentificados").textContent = "0";
       document.getElementById("mPendentes").textContent = "0";
