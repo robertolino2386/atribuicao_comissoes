@@ -8,7 +8,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
@@ -35,7 +37,7 @@
     }
 
     main {
-      max-width: 1200px;
+      max-width: 1280px;
       margin: 24px auto;
       padding: 0 16px 40px;
     }
@@ -61,9 +63,10 @@
       margin-bottom: 8px;
     }
 
-    input[type="file"] {
+    input[type="file"],
+    input[type="text"] {
       width: 100%;
-      padding: 12px;
+      padding: 11px;
       border: 1px solid #cbd5e1;
       border-radius: 10px;
       background: white;
@@ -79,7 +82,6 @@
       background: #00285C;
       color: white;
       margin-top: 12px;
-      margin-right: 8px;
       transition: 0.2s;
     }
 
@@ -95,21 +97,31 @@
 
     button.success {
       background: #15803d;
-      color: white;
+    }
+
+    button.warn {
+      background: #D6AE00;
+      color: #1f2937;
+    }
+
+    button.small-btn {
+      padding: 8px 10px;
+      margin-top: 0;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
     }
 
     .status {
       margin-top: 12px;
       color: #475569;
       font-size: 14px;
-      line-height: 1.5;
-    }
-
-    .hint {
-      color: #64748b;
-      font-size: 13px;
-      margin-top: 8px;
-      line-height: 1.4;
     }
 
     .summary {
@@ -149,7 +161,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 800px;
+      min-width: 1050px;
     }
 
     th, td {
@@ -157,6 +169,7 @@
       padding: 10px;
       text-align: left;
       font-size: 13px;
+      vertical-align: middle;
     }
 
     th {
@@ -164,7 +177,9 @@
       color: white;
     }
 
-    tr:nth-child(even) td { background: #f8fafc; }
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
 
     .badge {
       display: inline-block;
@@ -176,9 +191,19 @@
       color: #991b1b;
     }
 
-    .badge.ok {
+    .badge.suggest {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .badge.saved {
       background: #dcfce7;
       color: #166534;
+    }
+
+    .muted {
+      color: #64748b;
+      font-size: 12px;
     }
 
     footer {
@@ -189,7 +214,9 @@
     }
 
     @media (max-width: 900px) {
-      .summary { grid-template-columns: 1fr; }
+      .summary {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -197,23 +224,24 @@
 <body>
   <header>
     <h1>Análise de Fornecedores</h1>
-    <p>Importação incremental da base e identificação dos responsáveis pendentes</p>
+    <p>Leitura da Base de Fornecedores, sugestão por Rede e gravação dos responsáveis confirmados</p>
   </header>
 
   <main>
     <div class="card">
       <h2>1. Base de Fornecedores</h2>
-      <p>Suba uma base para acrescentar novos fornecedores no Google Sheets.</p>
+      <p>
+        Suba o arquivo da base para alimentar o Google Sheets de forma incremental.
+        Fornecedores novos são acrescentados e fornecedores já existentes são atualizados.
+      </p>
 
       <label for="arquivoBase">Subir base de fornecedores</label>
       <input type="file" id="arquivoBase" accept=".xlsx,.xls,.csv" />
 
-      <div class="hint">
-        Colunas aceitas: BKO, Fornecedor/Pessoa, Rede e Responsável. A importação acrescenta novos fornecedores e atualiza fornecedores existentes sem apagar a base inteira.
+      <div class="actions">
+        <button onclick="importarBase()">Importar para Google Sheets</button>
+        <button class="secondary" onclick="carregarBase()">Recarregar Base</button>
       </div>
-
-      <button class="success" onclick="importarBase()">Importar para Google Sheets</button>
-      <button class="secondary" onclick="carregarBase()">Recarregar Base</button>
 
       <div id="statusBase" class="status"></div>
     </div>
@@ -224,12 +252,11 @@
       <label for="arquivoAnalise">Subir arquivo de análise</label>
       <input type="file" id="arquivoAnalise" accept=".xlsx,.xls,.csv" />
 
-      <div class="hint">
-        O sistema procura o fornecedor pelo campo Pessoa e mostra apenas os registros sem responsável identificado. Quando houver Rede, sugere o responsável com base em outros fornecedores da mesma rede.
+      <div class="actions">
+        <button onclick="processarAnalise()">Processar Arquivo</button>
+        <button class="secondary" onclick="salvarTodosPreenchidos()">Salvar todos preenchidos</button>
+        <button class="warn" onclick="limparTela()">Limpar Tela</button>
       </div>
-
-      <button onclick="processarAnalise()">Processar Arquivo</button>
-      <button class="secondary" onclick="limparTela()">Limpar Tela</button>
 
       <div id="statusAnalise" class="status"></div>
     </div>
@@ -239,14 +266,17 @@
         <span>Base carregada</span>
         <strong id="mBase">0</strong>
       </div>
+
       <div class="metric">
         <span>Linhas analisadas</span>
         <strong id="mAnalise">0</strong>
       </div>
+
       <div class="metric">
         <span>Responsável identificado</span>
         <strong id="mIdentificados">0</strong>
       </div>
+
       <div class="metric">
         <span>Sem responsável</span>
         <strong id="mPendentes">0</strong>
@@ -255,6 +285,9 @@
 
     <div class="card">
       <h2>3. Fornecedores sem responsável identificado</h2>
+      <p class="muted">
+        Edite ou confirme a sugestão. Ao salvar, o fornecedor será gravado na Base de Fornecedores para os próximos relatórios.
+      </p>
 
       <div class="table-wrap">
         <table>
@@ -264,13 +297,14 @@
               <th>Pessoa / Fornecedor</th>
               <th>Código</th>
               <th>Rede</th>
-              <th>Sugestão de Responsável</th>
-              <th>Motivo</th>
+              <th>Sugestão</th>
+              <th>Responsável correto</th>
+              <th>Ação</th>
             </tr>
           </thead>
           <tbody id="tbodyPendentes">
             <tr>
-              <td colspan="6">Nenhum arquivo processado.</td>
+              <td colspan="7">Nenhum arquivo processado.</td>
             </tr>
           </tbody>
         </table>
@@ -286,14 +320,15 @@
     const API_URL = "https://script.google.com/macros/s/AKfycby-n2nlfwxTU4QN2KWl9uNcLw7cpp5UtC18xcRa9ciki_B9wnTrEaDL-RMvhR_s9Zc3QA/exec";
 
     let baseFornecedores = [];
+    let pendentesGlobais = [];
 
     function normalizarTexto(valor) {
       return String(valor || "")
         .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[\\u0300-\\u036f]/g, "")
         .trim()
         .toUpperCase()
-        .replace(/\s+/g, " ");
+        .replace(/\\s+/g, " ");
     }
 
     function escaparHTML(valor) {
@@ -301,83 +336,69 @@
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
+        .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
     }
 
     function encontrarCampo(obj, nomesPossiveis) {
       const chaves = Object.keys(obj);
+
       for (const nome of nomesPossiveis) {
         const campo = chaves.find(chave => normalizarTexto(chave) === normalizarTexto(nome));
         if (campo) return obj[campo];
       }
+
       return "";
+    }
+
+    function ehRedeIndependente(rede) {
+      const redeNorm = normalizarTexto(rede);
+      return redeNorm === "INDEPENDENTE" ||
+             redeNorm === "REDE INDEPENDENTE" ||
+             redeNorm === "INDEPENDENTES";
     }
 
     async function api(action, payload = {}) {
       const resp = await fetch(API_URL, {
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action, ...payload })
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({
+          action,
+          ...payload
+        })
       });
 
       const json = await resp.json();
-      if (!json.success) throw new Error(json.message || "Erro na API.");
+
+      if (!json.success) {
+        throw new Error(json.message || "Erro na API.");
+      }
+
       return json;
     }
 
     async function carregarBase() {
       try {
         document.getElementById("statusBase").textContent = "Carregando Base de Fornecedores...";
+
         const json = await api("listarBase");
+
         baseFornecedores = json.data || [];
+
         document.getElementById("mBase").textContent = baseFornecedores.length;
-        document.getElementById("statusBase").textContent = `Base carregada com ${baseFornecedores.length} fornecedor(es).`;
+        document.getElementById("statusBase").textContent = `Base carregada com ${baseFornecedores.length} fornecedores.`;
+
       } catch (err) {
         document.getElementById("statusBase").textContent = "Erro ao carregar base: " + err.message;
-      }
-    }
-
-    async function importarBase() {
-      try {
-        document.getElementById("statusBase").textContent = "Lendo arquivo da base...";
-
-        const linhas = await lerArquivoExcel("arquivoBase");
-
-        const registros = linhas
-          .map(linha => ({
-            bko: encontrarCampo(linha, ["BKO"]),
-            fornecedor: encontrarCampo(linha, ["Fornecedor", "Pessoa", "Nome Fornecedor", "Nome do Fornecedor"]),
-            rede: encontrarCampo(linha, ["Rede"]),
-            responsavel: encontrarCampo(linha, ["Responsável", "Responsavel", "Código Responsável", "Codigo Responsavel"])
-          }))
-          .filter(item => item.fornecedor);
-
-        if (!registros.length) {
-          throw new Error("Nenhum fornecedor encontrado no arquivo.");
-        }
-
-        document.getElementById("statusBase").textContent = "Enviando fornecedores para o Google Sheets...";
-
-        const json = await api("upsertBase", { registros });
-
-        document.getElementById("statusBase").innerHTML = `
-          Importação concluída.<br>
-          ${json.inseridos || 0} fornecedor(es) inserido(s).<br>
-          ${json.atualizados || 0} fornecedor(es) atualizado(s).<br>
-          ${json.preservados || 0} responsável(is) preservado(s).
-        `;
-
-        document.getElementById("arquivoBase").value = "";
-        await carregarBase();
-      } catch (err) {
-        document.getElementById("statusBase").textContent = "Erro ao importar base: " + err.message;
       }
     }
 
     function lerArquivoExcel(inputId) {
       return new Promise((resolve, reject) => {
         const file = document.getElementById(inputId).files[0];
+
         if (!file) {
           reject(new Error("Selecione um arquivo primeiro."));
           return;
@@ -391,8 +412,13 @@
             const workbook = XLSX.read(data, { type: "array" });
             const primeiraAba = workbook.SheetNames[0];
             const sheet = workbook.Sheets[primeiraAba];
-            const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+            const json = XLSX.utils.sheet_to_json(sheet, {
+              defval: ""
+            });
+
             resolve(json);
+
           } catch (err) {
             reject(err);
           }
@@ -406,52 +432,86 @@
       });
     }
 
+    async function importarBase() {
+      try {
+        document.getElementById("statusBase").textContent = "Lendo arquivo da base...";
+
+        const linhas = await lerArquivoExcel("arquivoBase");
+
+        const registros = linhas
+          .map(linha => ({
+            bko: encontrarCampo(linha, ["BKO"]),
+            fornecedor: encontrarCampo(linha, [
+              "Fornecedor",
+              "Pessoa",
+              "Nome Fornecedor",
+              "Nome do Fornecedor"
+            ]),
+            rede: encontrarCampo(linha, ["Rede"]),
+            responsavel: encontrarCampo(linha, [
+              "Responsável",
+              "Responsavel",
+              "Código Responsável",
+              "Codigo Responsavel"
+            ])
+          }))
+          .filter(item => item.fornecedor);
+
+        if (!registros.length) {
+          throw new Error("Nenhum fornecedor encontrado no arquivo.");
+        }
+
+        document.getElementById("statusBase").textContent = "Enviando fornecedores para o Google Sheets...";
+
+        const json = await api("upsertBase", {
+          registros
+        });
+
+        document.getElementById("statusBase").textContent =
+          `${json.inseridos || 0} fornecedor(es) inserido(s) e ${json.atualizados || 0} atualizado(s).`;
+
+        await carregarBase();
+
+      } catch (err) {
+        document.getElementById("statusBase").textContent = "Erro ao importar base: " + err.message;
+      }
+    }
+
     function montarIndiceBase() {
-      const indice = new Map();
+      const porFornecedor = new Map();
       const responsaveisPorRede = new Map();
 
       baseFornecedores.forEach(item => {
-        const fornecedor = normalizarTexto(item.fornecedor);
-        const rede = normalizarTexto(item.rede);
-        const responsavel = String(item.responsavel || "").trim();
+        const fornecedorKey = normalizarTexto(item.fornecedor);
+        const redeKey = normalizarTexto(item.rede);
 
-        if (fornecedor) {
-          indice.set(fornecedor, item);
+        if (fornecedorKey) {
+          porFornecedor.set(fornecedorKey, item);
         }
 
-        if (rede && responsavel && !ehRedeIndependente(rede)) {
-          if (!responsaveisPorRede.has(rede)) {
-            responsaveisPorRede.set(rede, {});
+        if (redeKey && item.responsavel && !ehRedeIndependente(item.rede)) {
+          if (!responsaveisPorRede.has(redeKey)) {
+            responsaveisPorRede.set(redeKey, {});
           }
 
-          const bucket = responsaveisPorRede.get(rede);
-          bucket[responsavel] = (bucket[responsavel] || 0) + 1;
+          const bucket = responsaveisPorRede.get(redeKey);
+          bucket[item.responsavel] = (bucket[item.responsavel] || 0) + 1;
         }
       });
 
       return {
-        porFornecedor: indice,
+        porFornecedor,
         responsaveisPorRede
       };
     }
 
-    function ehRedeIndependente(rede) {
-      const redeNormalizada = normalizarTexto(rede);
-      return redeNormalizada === "INDEPENDENTE" || redeNormalizada === "REDE INDEPENDENTE";
-    }
-
     function sugerirResponsavelPorRede(rede, responsaveisPorRede) {
-      const redeNormalizada = normalizarTexto(rede);
+      if (!rede || ehRedeIndependente(rede)) return "";
 
-      if (!redeNormalizada || ehRedeIndependente(redeNormalizada)) {
-        return "";
-      }
+      const redeKey = normalizarTexto(rede);
+      const bucket = responsaveisPorRede.get(redeKey);
 
-      const bucket = responsaveisPorRede.get(redeNormalizada);
-
-      if (!bucket) {
-        return "";
-      }
+      if (!bucket) return "";
 
       return Object.entries(bucket)
         .sort((a, b) => b[1] - a[1])[0][0];
@@ -461,7 +521,9 @@
       try {
         document.getElementById("statusAnalise").textContent = "Processando arquivo...";
 
-        if (!baseFornecedores.length) await carregarBase();
+        if (!baseFornecedores.length) {
+          await carregarBase();
+        }
 
         const linhas = await lerArquivoExcel("arquivoAnalise");
         const { porFornecedor, responsaveisPorRede } = montarIndiceBase();
@@ -470,72 +532,207 @@
         let identificados = 0;
         const pendentes = [];
 
-        linhas.forEach(linha => {
-          const pessoa = encontrarCampo(linha, ["Pessoa", "Fornecedor", "Nome Fornecedor", "Nome do Fornecedor"]);
-          const codigo = encontrarCampo(linha, ["Código", "Codigo", "CODIGO", "CCPP", "Código CCPP"]);
-          const rede = encontrarCampo(linha, ["Rede", "Nome Rede", "Rede Fornecedor", "Nome da Rede"]);
+        linhas.forEach((linha, index) => {
+          const pessoa = encontrarCampo(linha, [
+            "Pessoa",
+            "Fornecedor",
+            "Nome Fornecedor",
+            "Nome do Fornecedor"
+          ]);
+
+          const codigo = encontrarCampo(linha, [
+            "Código",
+            "Codigo",
+            "CODIGO",
+            "CCPP",
+            "Código CCPP"
+          ]);
+
+          const rede = encontrarCampo(linha, [
+            "Rede",
+            "Rede Fornecedor",
+            "Nome Rede"
+          ]);
 
           if (!pessoa) return;
 
           analisadas++;
+
           const chavePessoa = normalizarTexto(pessoa);
           const encontrado = porFornecedor.get(chavePessoa);
 
           if (encontrado && encontrado.responsavel) {
             identificados++;
           } else {
-            const redeParaSugestao = rede || (encontrado ? encontrado.rede : "");
-            const sugestao = sugerirResponsavelPorRede(redeParaSugestao, responsaveisPorRede);
+            const redeFinal = rede || (encontrado ? encontrado.rede : "");
+            const sugestao = sugerirResponsavelPorRede(redeFinal, responsaveisPorRede);
 
             pendentes.push({
+              id: index,
               pessoa,
               codigo,
-              rede: redeParaSugestao,
+              rede: redeFinal,
               sugestao,
-              motivo: encontrado
-                ? "Fornecedor localizado na base, mas sem responsável preenchido."
-                : "Fornecedor não localizado na Base de Fornecedores."
+              responsavel: sugestao || "",
+              salvo: false,
+              motivo: encontrado ? "Fornecedor localizado na base, mas sem responsável preenchido." : "Fornecedor não localizado na Base de Fornecedores."
             });
           }
         });
+
+        pendentesGlobais = pendentes;
 
         document.getElementById("mAnalise").textContent = analisadas;
         document.getElementById("mIdentificados").textContent = identificados;
         document.getElementById("mPendentes").textContent = pendentes.length;
 
-        renderizarPendentes(pendentes);
+        renderizarPendentes();
+
         document.getElementById("statusAnalise").textContent = `Processamento concluído. ${pendentes.length} fornecedor(es) sem responsável identificado.`;
+
       } catch (err) {
         document.getElementById("statusAnalise").textContent = "Erro ao processar análise: " + err.message;
       }
     }
 
-    function renderizarPendentes(pendentes) {
+    function renderizarPendentes() {
       const tbody = document.getElementById("tbodyPendentes");
       tbody.innerHTML = "";
 
-      if (!pendentes.length) {
-        tbody.innerHTML = `<tr><td colspan="6">Todos os fornecedores foram identificados com responsável.</td></tr>`;
+      if (!pendentesGlobais.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7">Todos os fornecedores foram identificados com responsável.</td>
+          </tr>
+        `;
         return;
       }
 
-      pendentes.forEach(item => {
+      pendentesGlobais.forEach(item => {
+        const badgeClass = item.salvo ? "saved" : (item.sugestao ? "suggest" : "");
+        const statusTexto = item.salvo ? "Salvo" : (item.sugestao ? "Sugestão" : "Pendente");
+
         tbody.insertAdjacentHTML("beforeend", `
-          <tr>
-            <td><span class="badge">Pendente</span></td>
+          <tr id="linha_${item.id}">
+            <td><span class="badge ${badgeClass}">${statusTexto}</span></td>
             <td>${escaparHTML(item.pessoa)}</td>
             <td>${escaparHTML(item.codigo)}</td>
             <td>${escaparHTML(item.rede)}</td>
-            <td>${item.sugestao ? escaparHTML(item.sugestao) : "Sem sugestão"}</td>
-            <td>${escaparHTML(item.motivo)}</td>
+            <td>${escaparHTML(item.sugestao || "")}</td>
+            <td>
+              <input type="text" id="resp_${item.id}" value="${escaparHTML(item.responsavel || "")}" placeholder="Digite o responsável" ${item.salvo ? "disabled" : ""} />
+            </td>
+            <td>
+              <div class="actions">
+                ${item.sugestao && !item.salvo ? `<button class="secondary small-btn" onclick="confirmarSugestao(${item.id})">Confirmar</button>` : ""}
+                ${!item.salvo ? `<button class="success small-btn" onclick="salvarLinha(${item.id})">Salvar</button>` : `<span class="muted">Gravado na base</span>`}
+              </div>
+            </td>
           </tr>
         `);
       });
     }
 
+    function confirmarSugestao(id) {
+      const item = pendentesGlobais.find(p => p.id === id);
+      if (!item || !item.sugestao) return;
+
+      const input = document.getElementById(`resp_${id}`);
+      input.value = item.sugestao;
+    }
+
+    async function salvarLinha(id) {
+      try {
+        const item = pendentesGlobais.find(p => p.id === id);
+        if (!item) return;
+
+        const responsavel = document.getElementById(`resp_${id}`).value.trim();
+
+        if (!responsavel) {
+          alert("Informe o responsável antes de salvar.");
+          return;
+        }
+
+        await api("upsertBase", {
+          registros: [{
+            bko: "",
+            fornecedor: item.pessoa,
+            rede: item.rede,
+            responsavel: responsavel
+          }]
+        });
+
+        item.responsavel = responsavel;
+        item.salvo = true;
+
+        await carregarBase();
+        renderizarPendentes();
+
+        document.getElementById("statusAnalise").textContent = `Responsável salvo para ${item.pessoa}.`;
+
+      } catch (err) {
+        alert("Erro ao salvar responsável: " + err.message);
+      }
+    }
+
+    async function salvarTodosPreenchidos() {
+      try {
+        const registros = [];
+
+        pendentesGlobais.forEach(item => {
+          if (item.salvo) return;
+
+          const input = document.getElementById(`resp_${item.id}`);
+          const responsavel = input ? input.value.trim() : "";
+
+          if (responsavel) {
+            registros.push({
+              bko: "",
+              fornecedor: item.pessoa,
+              rede: item.rede,
+              responsavel: responsavel
+            });
+
+            item.responsavel = responsavel;
+          }
+        });
+
+        if (!registros.length) {
+          alert("Nenhum responsável preenchido para salvar.");
+          return;
+        }
+
+        await api("upsertBase", {
+          registros
+        });
+
+        pendentesGlobais.forEach(item => {
+          if (item.responsavel) {
+            item.salvo = true;
+          }
+        });
+
+        await carregarBase();
+        renderizarPendentes();
+
+        document.getElementById("statusAnalise").textContent =
+          `${registros.length} responsável(is) salvo(s) na Base de Fornecedores.`;
+
+      } catch (err) {
+        alert("Erro ao salvar responsáveis: " + err.message);
+      }
+    }
+
     function limparTela() {
       document.getElementById("arquivoAnalise").value = "";
-      document.getElementById("tbodyPendentes").innerHTML = `<tr><td colspan="6">Nenhum arquivo processado.</td></tr>`;
+      pendentesGlobais = [];
+
+      document.getElementById("tbodyPendentes").innerHTML = `
+        <tr>
+          <td colspan="7">Nenhum arquivo processado.</td>
+        </tr>
+      `;
+
       document.getElementById("mAnalise").textContent = "0";
       document.getElementById("mIdentificados").textContent = "0";
       document.getElementById("mPendentes").textContent = "0";
