@@ -282,6 +282,93 @@
         padding: 0 12px 36px;
       }
     }
+
+
+    .header-actions {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .header-actions button {
+      margin-top: 0;
+      background: white;
+      color: #00285C;
+      border: 1px solid rgba(255,255,255,.65);
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(15, 23, 42, .65);
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .modal.open { display: flex; align-items: flex-start; justify-content: center; }
+
+    .modal-content {
+      width: min(900px, 100%);
+      margin: 30px auto;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 24px 70px rgba(0,0,0,.28);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      background: #00285C;
+      color: white;
+      padding: 18px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .modal-header h2 { color: white; margin: 0; }
+    .modal-close { margin: 0; background: transparent; font-size: 24px; padding: 4px 10px; }
+    .modal-body { padding: 20px; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    .sql-box {
+      width: 100%;
+      min-height: 240px;
+      resize: vertical;
+      padding: 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .code-pill {
+      font-family: Consolas, monospace;
+      background: #e0f2fe;
+      color: #075985;
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+
+    @media (max-width: 700px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+
   </style>
 </head>
 
@@ -289,6 +376,9 @@
   <header>
     <h1>Análise de Fornecedores</h1>
     <p>Base de Fornecedores, sugestão por Rede, edição de responsáveis e gravação no Google Sheets</p>
+    <div class="header-actions">
+      <button onclick="abrirModalResponsaveis()">+ Cadastro de Responsáveis</button>
+    </div>
   </header>
 
   <main>
@@ -401,7 +491,74 @@
         <div class="page-info" id="infoPagina">Página 0 de 0</div>
       </div>
     </div>
+
+
+    <div class="card">
+      <h2>4. Gerador de UPDATE de Responsáveis</h2>
+      <p class="muted">
+        Depois de processar o arquivo de análise e definir os responsáveis, gere todos os comandos SQL para executar no sistema.
+      </p>
+
+      <div class="actions">
+        <button onclick="gerarUpdates()">Gerar UPDATEs</button>
+        <button class="success" onclick="copiarUpdates()">Copiar todos</button>
+        <button class="warn" onclick="limparUpdates()">Limpar</button>
+      </div>
+
+      <div id="statusUpdates" class="status"></div>
+      <textarea id="sqlUpdates" class="sql-box" readonly placeholder="Os comandos UPDATE serão exibidos aqui..."></textarea>
+    </div>
+
   </main>
+
+
+
+  <div class="modal" id="modalResponsaveis" onclick="fecharModalAoFundo(event)">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Cadastro de Responsáveis</h2>
+        <button class="modal-close" onclick="fecharModalResponsaveis()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div>
+            <label for="novoUsuario">Usuário</label>
+            <input type="text" id="novoUsuario" placeholder="Ex.: NOVO.COLABORADOR" />
+          </div>
+          <div>
+            <label for="novoCodigo">Código</label>
+            <input type="text" id="novoCodigo" placeholder="Ex.: 1234" />
+          </div>
+          <button class="success" onclick="salvarResponsavelCadastro()" id="btnSalvarResponsavel">Adicionar</button>
+        </div>
+
+        <input type="hidden" id="usuarioOriginal" />
+
+        <div class="filters" style="grid-template-columns:1fr;">
+          <div>
+            <label for="pesquisaResponsavel">Pesquisar colaborador</label>
+            <input type="text" id="pesquisaResponsavel" placeholder="Digite o nome ou código..." oninput="renderizarResponsaveis()" />
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table style="min-width:680px;">
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>Código</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyResponsaveis">
+              <tr><td colspan="3">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="statusResponsaveis" class="status"></div>
+      </div>
+    </div>
+  </div>
 
   <footer>
     Desenvolvido por <strong><em>Roberto Lino</em></strong>
@@ -415,6 +572,8 @@
     let pendentesFiltrados = [];
     let paginaAtual = 1;
     const itensPorPagina = 10;
+    let responsaveisCadastrados = [];
+    let linhasAnaliseGlobais = [];
 
     function normalizarTexto(valor) {
       return String(valor || "")
@@ -637,6 +796,7 @@
         let analisadas = 0;
         let identificados = 0;
         const pendentes = [];
+        const linhasAnalise = [];
 
         linhas.forEach((linha, index) => {
           const pessoa = encontrarCampo(linha, [
@@ -671,11 +831,18 @@
 
           if (encontrado && encontrado.responsavel) {
             identificados++;
+            linhasAnalise.push({
+              id: index,
+              pessoa,
+              codigo,
+              rede: rede || encontrado.rede || "",
+              responsavel: encontrado.responsavel || ""
+            });
           } else {
             const redeFinal = rede || (encontrado ? encontrado.rede : "");
             const sugestao = sugerirResponsavelPorRede(redeFinal, responsaveisPorRede);
 
-            pendentes.push({
+            const pendente = {
               id: index,
               pessoa,
               codigo,
@@ -684,7 +851,9 @@
               responsavel: "",
               salvo: false,
               motivo: encontrado ? "Fornecedor localizado na base, mas sem responsável preenchido." : "Fornecedor não localizado na Base de Fornecedores."
-            });
+            };
+            pendentes.push(pendente);
+            linhasAnalise.push(pendente);
           }
         });
 
@@ -702,6 +871,7 @@
         });
 
         pendentesGlobais = pendentes;
+        linhasAnaliseGlobais = linhasAnalise;
         paginaAtual = 1;
 
         document.getElementById("mAnalise").textContent = analisadas;
@@ -971,11 +1141,194 @@
       }
     }
 
+
+    async function carregarResponsaveis() {
+      try {
+        const json = await api("listarResponsaveis");
+        responsaveisCadastrados = json.data || [];
+        renderizarResponsaveis();
+      } catch (err) {
+        document.getElementById("statusResponsaveis").textContent = "Erro ao carregar responsáveis: " + err.message;
+      }
+    }
+
+    function abrirModalResponsaveis() {
+      document.getElementById("modalResponsaveis").classList.add("open");
+      document.body.style.overflow = "hidden";
+      carregarResponsaveis();
+    }
+
+    function fecharModalResponsaveis() {
+      document.getElementById("modalResponsaveis").classList.remove("open");
+      document.body.style.overflow = "";
+      limparFormularioResponsavel();
+    }
+
+    function fecharModalAoFundo(event) {
+      if (event.target.id === "modalResponsaveis") fecharModalResponsaveis();
+    }
+
+    function renderizarResponsaveis() {
+      const tbody = document.getElementById("tbodyResponsaveis");
+      if (!tbody) return;
+
+      const termo = normalizarTexto(document.getElementById("pesquisaResponsavel")?.value || "");
+      const lista = responsaveisCadastrados
+        .filter(item => !termo || normalizarTexto(item.usuario).includes(termo) || String(item.codigo).includes(termo))
+        .sort((a,b) => normalizarTexto(a.usuario).localeCompare(normalizarTexto(b.usuario)));
+
+      if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="3">Nenhum responsável cadastrado.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = lista.map(item => `
+        <tr>
+          <td>${escaparHTML(item.usuario)}</td>
+          <td><span class="code-pill">${escaparHTML(item.codigo)}</span></td>
+          <td>
+            <div class="actions">
+              <button class="secondary small-btn" onclick="editarResponsavelCadastro('${encodeURIComponent(item.usuario)}')">Editar</button>
+              <button class="danger small-btn" onclick="excluirResponsavelCadastro('${encodeURIComponent(item.usuario)}')">Excluir</button>
+            </div>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    function editarResponsavelCadastro(usuarioCodificado) {
+      const usuario = decodeURIComponent(usuarioCodificado);
+      const item = responsaveisCadastrados.find(r => r.usuario === usuario);
+      if (!item) return;
+
+      document.getElementById("usuarioOriginal").value = item.usuario;
+      document.getElementById("novoUsuario").value = item.usuario;
+      document.getElementById("novoCodigo").value = item.codigo;
+      document.getElementById("btnSalvarResponsavel").textContent = "Salvar alteração";
+      document.getElementById("novoUsuario").focus();
+    }
+
+    function limparFormularioResponsavel() {
+      document.getElementById("usuarioOriginal").value = "";
+      document.getElementById("novoUsuario").value = "";
+      document.getElementById("novoCodigo").value = "";
+      document.getElementById("btnSalvarResponsavel").textContent = "Adicionar";
+    }
+
+    async function salvarResponsavelCadastro() {
+      try {
+        const usuarioOriginal = document.getElementById("usuarioOriginal").value.trim();
+        const usuario = document.getElementById("novoUsuario").value.trim();
+        const codigo = document.getElementById("novoCodigo").value.trim();
+
+        if (!usuario || !codigo) {
+          alert("Informe o usuário e o código.");
+          return;
+        }
+
+        if (!/^\d+$/.test(codigo)) {
+          alert("O código deve conter apenas números.");
+          return;
+        }
+
+        await api("salvarResponsavel", { usuarioOriginal, usuario, codigo });
+        document.getElementById("statusResponsaveis").textContent = `Responsável ${usuario} salvo com sucesso.`;
+        limparFormularioResponsavel();
+        await carregarResponsaveis();
+      } catch (err) {
+        alert("Erro ao salvar responsável: " + err.message);
+      }
+    }
+
+    async function excluirResponsavelCadastro(usuarioCodificado) {
+      const usuario = decodeURIComponent(usuarioCodificado);
+      if (!confirm(`Excluir o responsável ${usuario}?`)) return;
+
+      try {
+        await api("excluirResponsavel", { usuario });
+        document.getElementById("statusResponsaveis").textContent = `Responsável ${usuario} excluído.`;
+        await carregarResponsaveis();
+      } catch (err) {
+        alert("Erro ao excluir responsável: " + err.message);
+      }
+    }
+
+    function codigoDoResponsavel(valor) {
+      const texto = String(valor || "").trim();
+      if (!texto) return "";
+      if (/^\d+$/.test(texto)) return texto;
+
+      const item = responsaveisCadastrados.find(r => normalizarTexto(r.usuario) === normalizarTexto(texto));
+      return item ? String(item.codigo) : "";
+    }
+
+    async function gerarUpdates() {
+      try {
+        if (!responsaveisCadastrados.length) await carregarResponsaveis();
+        if (!linhasAnaliseGlobais.length) {
+          alert("Processe primeiro o Arquivo de Análise no Bloco 2.");
+          return;
+        }
+
+        const updates = [];
+        const erros = [];
+
+        linhasAnaliseGlobais.forEach(item => {
+          const pendenteAtual = pendentesGlobais.find(p => p.id === item.id);
+          const responsavel = pendenteAtual ? (pendenteAtual.responsavel || pendenteAtual.sugestao || "") : item.responsavel;
+          const codigoResp = codigoDoResponsavel(responsavel);
+          const codigoCCPP = String(item.codigo || "").trim().replace(/'/g, "''");
+
+          if (!codigoCCPP) {
+            erros.push(`${item.pessoa}: sem código CCPP`);
+            return;
+          }
+          if (!codigoResp) {
+            erros.push(`${item.pessoa}: responsável não cadastrado (${responsavel || "vazio"})`);
+            return;
+          }
+
+          updates.push(`update CCPP_CABECALHOS set RESPONSAVEL='${codigoResp}' where CODIGO='${codigoCCPP}';`);
+        });
+
+        document.getElementById("sqlUpdates").value = updates.join("\n");
+        document.getElementById("statusUpdates").textContent =
+          `${updates.length} UPDATE(s) gerado(s).` + (erros.length ? ` ${erros.length} linha(s) não gerada(s): ${erros.slice(0,5).join(" | ")}${erros.length > 5 ? "..." : ""}` : "");
+      } catch (err) {
+        document.getElementById("statusUpdates").textContent = "Erro ao gerar UPDATEs: " + err.message;
+      }
+    }
+
+    async function copiarUpdates() {
+      const texto = document.getElementById("sqlUpdates").value;
+      if (!texto) {
+        alert("Gere os UPDATEs primeiro.");
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(texto);
+      } catch (_) {
+        const area = document.getElementById("sqlUpdates");
+        area.removeAttribute("readonly");
+        area.select();
+        document.execCommand("copy");
+        area.setAttribute("readonly", "readonly");
+      }
+      document.getElementById("statusUpdates").textContent = "Todos os UPDATEs foram copiados.";
+    }
+
+    function limparUpdates() {
+      document.getElementById("sqlUpdates").value = "";
+      document.getElementById("statusUpdates").textContent = "";
+    }
+
     function limparTela() {
       document.getElementById("arquivoAnalise").value = "";
 
       pendentesGlobais = [];
       pendentesFiltrados = [];
+      linhasAnaliseGlobais = [];
       paginaAtual = 1;
 
       document.getElementById("tbodyPendentes").innerHTML = `
@@ -997,6 +1350,7 @@
 
     window.addEventListener("load", () => {
       carregarBase();
+      carregarResponsaveis();
       atualizarPaginacao(0);
     });
   </script>
